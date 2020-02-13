@@ -104,6 +104,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
@@ -326,6 +327,20 @@ public class DatastoreStorage implements Closeable {
 
   public Map<WorkflowId, Workflow> workflows() throws IOException {
     var workflows = new HashMap<WorkflowId, Workflow>();
+    readWorkflows((workflow, entity) -> workflows.put(workflow.id(), workflow));
+    return workflows;
+  }
+
+  public Map<WorkflowId, WorkflowWithState> workflowsWithStates() throws IOException {
+    var workflows = new HashMap<WorkflowId, WorkflowWithState>();
+    readWorkflows((workflow, entity) -> {
+      var workflowState = workflowState(Optional.of(entity));
+      workflows.put(workflow.id(), WorkflowWithState.create(workflow, workflowState));
+    });
+    return workflows;
+  }
+
+  private void readWorkflows(BiConsumer<Workflow, Entity> consumer) throws IOException {
     var query = Query.newEntityQueryBuilder().setKind(KIND_WORKFLOW).build();
     datastore.query(query, entity -> {
       Workflow workflow;
@@ -335,9 +350,8 @@ public class DatastoreStorage implements Closeable {
         log.warn("Failed to read workflow {}.", entity.getKey(), e);
         return;
       }
-      workflows.put(workflow.id(), workflow);
+      consumer.accept(workflow, entity);
     });
-    return workflows;
   }
 
   public Map<WorkflowId, Workflow> workflows(Set<WorkflowId> workflowIds) {
@@ -370,24 +384,37 @@ public class DatastoreStorage implements Closeable {
   }
 
   public List<Workflow> workflows(String componentId) throws IOException {
-    final List<Workflow> workflows = Lists.newArrayList();
+    var workflows = new ArrayList<Workflow>();
+    readWorkflows(componentId, (workflow, entity) -> {
+      workflows.add(workflow);
+    });
+    return workflows;
+  }
+
+  public List<WorkflowWithState> workflowsWithStates(String componentId) throws IOException {
+    var workflows = new ArrayList<WorkflowWithState>();
+    readWorkflows(componentId, (workflow, entity) -> {
+      var workflowState = workflowState(Optional.of(entity));
+      workflows.add(WorkflowWithState.create(workflow, workflowState));
+    });
+    return workflows;
+  }
+
+  public void readWorkflows(String componentId, BiConsumer<Workflow, Entity> consumer) throws IOException {
     final EntityQuery query = Query.newEntityQueryBuilder()
         .setKind(KIND_WORKFLOW)
         .setFilter(PropertyFilter.eq(PROPERTY_COMPONENT, componentId))
         .build();
     datastore.query(query, entity -> {
       final Workflow workflow;
-      if (entity.contains(PROPERTY_WORKFLOW_JSON)) {
-        try {
-          workflow = OBJECT_MAPPER.readValue(entity.getString(PROPERTY_WORKFLOW_JSON), Workflow.class);
-        } catch (IOException e) {
-          log.warn("Failed to read workflow {}.", entity.getKey(), e);
-          return;
-        }
-        workflows.add(workflow);
+      try {
+        workflow = OBJECT_MAPPER.readValue(entity.getString(PROPERTY_WORKFLOW_JSON), Workflow.class);
+      } catch (IOException e) {
+        log.warn("Failed to read workflow {}.", entity.getKey(), e);
+        return;
       }
+      consumer.accept(workflow, entity);
     });
-    return workflows;
   }
 
   Set<WorkflowInstance> listActiveInstances() throws IOException {

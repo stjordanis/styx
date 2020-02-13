@@ -92,6 +92,7 @@ import com.spotify.styx.model.WorkflowConfiguration.Secret;
 import com.spotify.styx.model.WorkflowId;
 import com.spotify.styx.model.WorkflowInstance;
 import com.spotify.styx.model.WorkflowState;
+import com.spotify.styx.model.WorkflowWithState;
 import com.spotify.styx.serialization.Json;
 import com.spotify.styx.state.Message;
 import com.spotify.styx.state.Message.MessageLevel;
@@ -229,6 +230,8 @@ public class DatastoreStorageTest {
           .build();
   static final Workflow WORKFLOW = Workflow.create(WORKFLOW_ID.componentId(),
       WORKFLOW_CONFIGURATION);
+
+  private static final WorkflowState EMPTY_STATE = WorkflowState.empty().toBuilder().enabled(false).build();
 
   @ClassRule public static final DatastoreEmulator datastoreEmulator = new DatastoreEmulator();
 
@@ -624,6 +627,25 @@ public class DatastoreStorageTest {
   }
 
   @Test
+  public void shouldReturnAllWorkflowsWithStates() throws Exception {
+    assertThat(storage.workflowsWithStates().isEmpty(), is(true));
+
+    Workflow workflow1 = workflow(WORKFLOW_ID1);
+    Workflow workflow2 = workflow(WORKFLOW_ID2);
+    Workflow workflow3 = workflow(WORKFLOW_ID3);
+
+    storage.store(workflow1);
+    storage.store(workflow2);
+    storage.store(workflow3);
+
+    var workflows = storage.workflowsWithStates();
+    assertThat(workflows.size(), is(3));
+    assertThat(workflows, hasEntry(WORKFLOW_ID1, WorkflowWithState.create(workflow1, EMPTY_STATE)));
+    assertThat(workflows, hasEntry(WORKFLOW_ID2, WorkflowWithState.create(workflow2, EMPTY_STATE)));
+    assertThat(workflows, hasEntry(WORKFLOW_ID3, WorkflowWithState.create(workflow3, EMPTY_STATE)));
+  }
+
+  @Test
   public void shouldReturnAllWorkflowsWithNextNaturalTrigger() throws Exception {
     assertThat(storage.workflows().isEmpty(), is(true));
 
@@ -704,7 +726,7 @@ public class DatastoreStorageTest {
 
   @Test
   public void shouldReturnAllWorkflowsInComponent() throws Exception {
-    String componentId = "component";
+    var componentId = "component";
 
     Workflow workflow1 = workflow(WORKFLOW_ID1);
     Workflow workflow2 = workflow(WORKFLOW_ID2);
@@ -718,8 +740,7 @@ public class DatastoreStorageTest {
     storage.store(workflow2);
     storage.store(workflow3);
 
-
-    List<Workflow> l = storage.workflows(componentId);
+    var l = storage.workflows(componentId);
     assertThat(l, hasSize(2));
 
     assertThat(l, hasItem(workflow1));
@@ -727,10 +748,31 @@ public class DatastoreStorageTest {
   }
 
   @Test
+  public void shouldReturnAllWorkflowsWithStatesInComponent() throws Exception {
+    var componentId = "component";
+
+    Workflow workflow1 = workflow(WORKFLOW_ID1);
+    Workflow workflow2 = workflow(WORKFLOW_ID2);
+    Workflow workflow3 = workflow(WORKFLOW_ID3);
+
+    assertThat(workflow1.componentId(), is(componentId));
+    assertThat(workflow2.componentId(), is(componentId));
+    assertThat(workflow3.componentId(), not(componentId));
+
+    storage.store(workflow1);
+    storage.store(workflow2);
+    storage.store(workflow3);
+
+    var l = storage.workflowsWithStates(componentId);
+    assertThat(l, hasSize(2));
+
+    assertThat(l, hasItem(WorkflowWithState.create(workflow1, EMPTY_STATE)));
+    assertThat(l, hasItem(WorkflowWithState.create(workflow2, EMPTY_STATE)));
+  }
+
+  @Test
   public void shouldReturnEmptyListIfComponentDoesNotExist() throws Exception {
-    String componentId = "component";
-    List<Workflow> l = storage.workflows(componentId);
-    assertThat(l, hasSize(0));
+    assertThat(storage.workflows("component"), hasSize(0));
   }
 
   @Test

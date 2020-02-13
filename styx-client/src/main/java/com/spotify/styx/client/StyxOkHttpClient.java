@@ -209,7 +209,9 @@ class StyxOkHttpClient implements StyxClient {
 
   @Override
   public CompletionStage<WorkflowWithState> workflowWithState(String componentId, String workflowId) {
-    return execute(forUri(urlBuilder("workflows", componentId, workflowId, "full")), WorkflowWithState.class);
+    return execute(forUri(urlBuilder("workflows", componentId, workflowId)
+            .addQueryParameter("withState", "true")),
+        WorkflowWithState.class);
   }
 
   @Override

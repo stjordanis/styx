@@ -115,6 +115,36 @@ public class AggregateStorageTest {
   }
 
   @Test
+  public void shouldReturnWorkflows() throws IOException {
+    sut.workflows();
+    verify(datastore).workflows();
+  }
+
+  @Test
+  public void shouldReturnWorkflowsWithStates() throws IOException {
+    sut.workflowsWithStates();
+    verify(datastore).workflowsWithStates();
+  }
+
+  @Test
+  public void shouldReturnWorkflowsOfComponent() throws IOException {
+    sut.workflows(COMPONENT);
+    verify(datastore).workflows(COMPONENT);
+  }
+
+  @Test
+  public void shouldReturnWorkflowsWithStatesOfComponent() throws IOException {
+    sut.workflowsWithStates(COMPONENT);
+    verify(datastore).workflowsWithStates(COMPONENT);
+  }
+
+  @Test
+  public void shouldReturnWorkflow() throws IOException {
+    sut.workflow(workflowInstance.workflowId());
+    verify(datastore).workflow(workflowInstance.workflowId());
+  }
+
+  @Test
   public void shouldReturnWorkflowWithState() throws IOException {
     sut.workflowWithState(workflowInstance.workflowId());
     verify(datastore).workflowWithState(workflowInstance.workflowId());

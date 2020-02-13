@@ -175,6 +175,11 @@ public class AggregateStorage implements Storage {
   }
 
   @Override
+  public List<WorkflowWithState> workflowsWithStates(String componentId) throws IOException {
+    return datastoreStorage.workflowsWithStates(componentId);
+  }
+
+  @Override
   public void delete(WorkflowId workflowId) throws IOException {
     datastoreStorage.delete(workflowId);
   }
@@ -193,6 +198,11 @@ public class AggregateStorage implements Storage {
   @Override
   public Map<WorkflowId, Workflow> workflows() throws IOException {
     return datastoreStorage.workflows();
+  }
+
+  @Override
+  public Map<WorkflowId, WorkflowWithState> workflowsWithStates() throws IOException {
+    return datastoreStorage.workflowsWithStates();
   }
 
   @Override

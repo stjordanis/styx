@@ -764,6 +764,21 @@ public class WorkflowResourceTest extends VersionedApiTest {
   }
 
   @Test
+  public void shouldReturnWorkflowsWithStates() throws Exception {
+    sinceVersion(Api.Version.V3);
+
+    storage.storeWorkflow(Workflow.create("other_component", WORKFLOW_CONFIGURATION));
+
+    Response<ByteString> response = awaitResponse(
+        serviceHelper.request("GET", path("/?withState=true")));
+
+    assertThat(response, hasStatus(withCode(Status.OK)));
+    assertJson(response, "[*]", hasSize(2));
+    assertJson(response, "[0].state.enabled", is(false));
+    assertJson(response, "[1].state.enabled", is(false));
+  }
+
+  @Test
   public void shouldFailedToReturnWorkflows() throws Exception {
     sinceVersion(Api.Version.V3);
 
@@ -802,6 +817,21 @@ public class WorkflowResourceTest extends VersionedApiTest {
   }
 
   @Test
+  public void shouldReturnWorkflowsWithStatesInComponent() throws Exception {
+    sinceVersion(Api.Version.V3);
+
+    storage.storeWorkflow(Workflow.create("other_component", WORKFLOW_CONFIGURATION));
+
+    Response<ByteString> response = awaitResponse(
+        serviceHelper.request("GET", path("/foo?withState=true")));
+
+    assertThat(response, hasStatus(withCode(Status.OK)));
+    assertJson(response, "[*]", hasSize(1));
+    assertJson(response, "[0].workflow.component_id", is("foo"));
+    assertJson(response, "[0].state.enabled", is(false));
+  }
+
+  @Test
   public void shouldReturnWorkflow() throws Exception {
     sinceVersion(Api.Version.V3);
 
@@ -828,11 +858,20 @@ public class WorkflowResourceTest extends VersionedApiTest {
 
   @Test
   public void shouldReturnWorkflowWithState() throws Exception {
+    shouldReturnWorkflowWithState(path("/foo/bar?withState=true"));
+  }
+
+  @Test
+  public void shouldReturnWorkflowWithStateDeprecated() throws Exception {
+    shouldReturnWorkflowWithState(path("/foo/bar/full"));
+  }
+
+  private void shouldReturnWorkflowWithState(String path) throws Exception {
     sinceVersion(Api.Version.V3);
 
     storage.storeWorkflow(Workflow.create("other_component", WORKFLOW_CONFIGURATION));
 
-    var response = awaitResponse(serviceHelper.request("GET", path("/foo/bar/full")));
+    var response = awaitResponse(serviceHelper.request("GET", path));
 
     assertThat(response, hasStatus(withCode(Status.OK)));
     assertJson(response, "workflow.component_id", is("foo"));
@@ -843,7 +882,7 @@ public class WorkflowResourceTest extends VersionedApiTest {
   public void shouldReturn404WhenWorkflowWithStateNotFound() throws Exception {
     sinceVersion(Api.Version.V3);
 
-    var response = awaitResponse(serviceHelper.request("GET", path("/example/workflow/full")));
+    var response = awaitResponse(serviceHelper.request("GET", path("/example/workflow?withState=true")));
 
     assertThat(response, hasStatus(withCode(Status.NOT_FOUND)));
   }
@@ -855,7 +894,7 @@ public class WorkflowResourceTest extends VersionedApiTest {
     when(storage.workflowWithState(WorkflowId.create("foo", "bar"))).thenThrow(new IOException());
 
     Response<ByteString> response = awaitResponse(
-        serviceHelper.request("GET", path("/foo/bar/full")));
+        serviceHelper.request("GET", path("/foo/bar?withState=true")));
 
     assertThat(response, hasStatus(withCode(Status.INTERNAL_SERVER_ERROR)));
   }

@@ -62,6 +62,7 @@ import org.slf4j.LoggerFactory;
 public final class WorkflowResource {
 
   private static final String BASE = "/workflows";
+  private static final String WITH_STATE = "withState";
   private static final int DEFAULT_PAGE_LIMIT = 24 * 7;
 
   private static final Logger LOG = LoggerFactory.getLogger(WorkflowResource.class);
@@ -89,16 +90,17 @@ public final class WorkflowResource {
     final List<Route<AsyncHandler<Response<ByteString>>>> routes = Arrays.asList(
         Route.with(
             json(), "GET", BASE + "/<cid>/<wfid>",
-            rc -> workflow(arg("cid", rc), arg("wfid", rc))),
+            rc -> workflow(arg("cid", rc), arg("wfid", rc), rc.request())),
         Route.with(
             json(), "GET", BASE + "/<cid>/<wfid>/full",
-            rc -> workflowWithState(arg("cid", rc), arg("wfid", rc))),
+            rc -> workflowWithState(arg("cid", rc), arg("wfid", rc)))
+            .withDocString("Get workflow definition and state", "Deprecated, use " + WITH_STATE + "=true instead"),
         Route.with(
             json(), "GET", BASE,
-            rc -> workflows()),
+            rc -> workflows(rc.request())),
         Route.with(
             json(), "GET", BASE + "/<cid>",
-            rc -> workflows(arg("cid", rc))),
+            rc -> workflows(arg("cid", rc), rc.request())),
         Route.with(
             Middlewares.<Workflow>authed(requestAuthenticator).and(json()), "POST", BASE + "/<cid>",
             rc -> ac -> createOrUpdateWorkflow(arg("cid", rc), rc, ac)),
@@ -190,6 +192,18 @@ public final class WorkflowResource {
     return Response.forPayload(workflow);
   }
 
+  private boolean withState(Request request) {
+    return "true".equalsIgnoreCase(request.parameter("withState").orElse("false"));
+  }
+
+  private Response<? extends Collection<?>> workflows(Request request) {
+    if (withState(request)) {
+      return workflowsWithStates();
+    } else {
+      return workflows();
+    }
+  }
+
   private Response<Collection<Workflow>> workflows() {
     try {
       return Response.forPayload(storage.workflows().values());
@@ -198,11 +212,65 @@ public final class WorkflowResource {
     }
   }
 
-  private Response<List<Workflow>> workflows(String componentId) {
+  private Response<Collection<WorkflowWithState>> workflowsWithStates() {
+    try {
+      return Response.forPayload(storage.workflowsWithStates().values());
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to get workflows with states", e);
+    }
+  }
+
+  private Response<? extends Collection<?>> workflows(String componentId, Request request) {
+    if (withState(request)) {
+      return workflowsWithStates(componentId);
+    } else {
+      return workflows(componentId);
+    }
+  }
+
+  private Response<Collection<Workflow>> workflows(String componentId) {
     try {
       return Response.forPayload(storage.workflows(componentId));
     } catch (IOException e) {
       throw new RuntimeException("Failed to get workflows of component " + componentId, e);
+    }
+  }
+
+  private Response<Collection<WorkflowWithState>> workflowsWithStates(String componentId) {
+    try {
+      return Response.forPayload(storage.workflowsWithStates(componentId));
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to get workflows with states", e);
+    }
+  }
+
+  private Response<?> workflow(String componentId, String id, Request request) {
+    if (withState(request)) {
+      return workflowWithState(componentId, id);
+    } else {
+     return workflow(componentId, id);
+    }
+  }
+
+  private Response<Workflow> workflow(String componentId, String id) {
+    var workflowId = WorkflowId.create(componentId, id);
+    try {
+      return storage.workflow(workflowId)
+          .map(Response::forPayload)
+          .orElse(Response.forStatus(Status.NOT_FOUND));
+    } catch (IOException e) {
+      throw new RuntimeException("Failed get workflow " + workflowId.toKey(), e);
+    }
+  }
+
+  private Response<WorkflowWithState> workflowWithState(String componentId, String id) {
+    var workflowId = WorkflowId.create(componentId, id);
+    try {
+      return storage.workflowWithState(workflowId)
+          .map(Response::forPayload)
+          .orElse(Response.forStatus(Status.NOT_FOUND));
+    } catch (IOException e) {
+      throw new RuntimeException("Failed get workflow " + workflowId.toKey(), e);
     }
   }
 
@@ -234,34 +302,12 @@ public final class WorkflowResource {
     return state(componentId, id);
   }
 
-  private Response<Workflow> workflow(String componentId, String id) {
-    var workflowId = WorkflowId.create(componentId, id);
-    try {
-      return storage.workflow(workflowId)
-          .map(Response::forPayload)
-          .orElse(Response.forStatus(Status.NOT_FOUND));
-    } catch (IOException e) {
-      throw new RuntimeException("Failed get workflow " + workflowId.toKey(), e);
-    }
-  }
-
   private Response<WorkflowState> state(String componentId, String id) {
     var workflowId = WorkflowId.create(componentId, id);
     try {
       return Response.forPayload(storage.workflowState(workflowId));
     } catch (IOException e) {
       throw new RuntimeException("Failed to get the state of workflow " + workflowId.toKey(), e);
-    }
-  }
-
-  private Response<WorkflowWithState> workflowWithState(String componentId, String id) {
-    var workflowId = WorkflowId.create(componentId, id);
-    try {
-      return storage.workflowWithState(workflowId)
-          .map(Response::forPayload)
-          .orElse(Response.forStatus(Status.NOT_FOUND));
-    } catch (IOException e) {
-      throw new RuntimeException("Failed get workflow " + workflowId.toKey(), e);
     }
   }
 

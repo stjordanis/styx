@@ -96,10 +96,18 @@ public interface Storage extends Closeable {
   /**
    * Get a list of {@link Workflow} definitions belonging to a component
    *
-   * @param componentId The workflow to get
+   * @param componentId ID of the component
    * @return A list of {@link Workflow} definitions
    */
   List<Workflow> workflows(String componentId) throws IOException;
+
+  /**
+   * Get a list of {@link WorkflowWithState}s belonging to a component
+   *
+   * @param componentId ID of the component
+   * @return A list of {@link WorkflowWithState}s
+   */
+  List<WorkflowWithState> workflowsWithStates(String componentId) throws IOException;
 
   /**
    * Removes a workflow definition.
@@ -127,6 +135,11 @@ public interface Storage extends Closeable {
    * Get all {@link Workflow}s.
    */
   Map<WorkflowId, Workflow> workflows() throws IOException;
+
+  /**
+   * Get all {@link WorkflowWithState}s.
+   */
+  Map<WorkflowId, WorkflowWithState> workflowsWithStates() throws IOException;
 
   /** Get all {@link Workflow}s by doing strongly consistent batch fetch.
    * 
