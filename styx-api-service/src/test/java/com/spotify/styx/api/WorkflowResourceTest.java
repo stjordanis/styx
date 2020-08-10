@@ -30,6 +30,8 @@ import static com.spotify.styx.api.JsonMatchers.assertJson;
 import static com.spotify.styx.model.SequenceEvent.create;
 import static com.spotify.styx.serialization.Json.deserialize;
 import static com.spotify.styx.serialization.Json.serialize;
+import static com.spotify.styx.testdata.TestData.DOCKER_EXEC_WORKFLOW_CONFIGURATION;
+import static com.spotify.styx.testdata.TestData.FLYTE_WORKFLOW_CONFIGURATION;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
@@ -127,6 +129,12 @@ public class WorkflowResourceTest extends VersionedApiTest {
   private static final Workflow WORKFLOW =
       Workflow.create("foo", WORKFLOW_CONFIGURATION);
 
+  private static final Workflow DOCKER_EXEC_WORKFLOW =
+      Workflow.create("dockerExec", DOCKER_EXEC_WORKFLOW_CONFIGURATION);
+
+  private static final Workflow FLYTE_EXEC_WORKFLOW =
+      Workflow.create("flyteExec", FLYTE_WORKFLOW_CONFIGURATION);
+
   private static final Workflow EXISTING_WORKFLOW =
       Workflow.create("foo", WorkflowConfigurationBuilder
           .from(WORKFLOW_CONFIGURATION)
@@ -173,6 +181,8 @@ public class WorkflowResourceTest extends VersionedApiTest {
   @Before
   public void setUp() throws Exception {
     storage.storeWorkflow(WORKFLOW);
+    storage.storeWorkflow(DOCKER_EXEC_WORKFLOW);
+    storage.storeWorkflow(FLYTE_EXEC_WORKFLOW);
   }
 
   @After
@@ -613,41 +623,74 @@ public class WorkflowResourceTest extends VersionedApiTest {
   }
 
   @Test
-  public void shouldCreateWorkflow() throws Exception {
-    sinceVersion(Api.Version.V3);
-
-    when(workflowInitializer.store(eq(WORKFLOW), any())).thenReturn(Optional.empty());
-
-    Response<ByteString> response =
-        awaitResponse(
-            serviceHelper
-                .request("POST", path("/foo"), serialize(WORKFLOW_CONFIGURATION)));
-
-    verify(workflowValidator).validateWorkflow(WORKFLOW);
-    verify(workflowInitializer).store(eq(WORKFLOW), any());
-    verify(workflowConsumer).accept(Optional.empty(), Optional.of(WORKFLOW));
-
-    assertThat(response, hasStatus(withCode(Status.OK)));
-    assertThat(deserialize(response.payload().orElseThrow(), Workflow.class), equalTo(WORKFLOW));
+  public void shouldCreateWorkflowWithOldConfig() throws Exception {
+    shouldCreateWorkflow(WORKFLOW);
   }
 
   @Test
-  public void shouldUpdateWorkflow() throws Exception {
+  public void shouldCreateWorkflowWithDockerExecConfig() throws Exception {
+    shouldCreateWorkflow(DOCKER_EXEC_WORKFLOW);
+  }
+
+  @Test
+  public void shouldCreateWorkflowWithFlyteExecConfig() throws Exception {
+    shouldCreateWorkflow(FLYTE_EXEC_WORKFLOW);
+  }
+
+  private void shouldCreateWorkflow(Workflow wf) throws Exception {
     sinceVersion(Api.Version.V3);
 
-    when(workflowInitializer.store(eq(WORKFLOW), any())).thenReturn(Optional.of(EXISTING_WORKFLOW));
+    when(workflowInitializer.store(eq(wf), any())).thenReturn(Optional.empty());
 
     Response<ByteString> response =
         awaitResponse(
             serviceHelper
-                .request("POST", path("/foo"), serialize(WORKFLOW_CONFIGURATION)));
+                .request("POST", path("/" + wf.componentId()), serialize(wf.configuration())));
 
-    verify(workflowValidator).validateWorkflow(WORKFLOW);
-    verify(workflowInitializer).store(eq(WORKFLOW), any());
-    verify(workflowConsumer).accept(Optional.of(EXISTING_WORKFLOW), Optional.of(WORKFLOW));
+    verify(workflowValidator).validateWorkflow(wf);
+    verify(workflowInitializer).store(eq(wf), any());
+    verify(workflowConsumer).accept(Optional.empty(), Optional.of(wf));
 
     assertThat(response, hasStatus(withCode(Status.OK)));
-    assertThat(deserialize(response.payload().orElseThrow(), Workflow.class), equalTo(WORKFLOW));
+    assertThat(deserialize(response.payload().orElseThrow(), Workflow.class), equalTo(wf));
+  }
+
+  @Test
+  public void shouldUpdateWorkflowWithOldConfig() throws Exception {
+    shouldUpdateWorkflow(WORKFLOW);
+  }
+
+  @Test
+  public void shouldUpdateWorkflowWithDockerExecConfig() throws Exception {
+    shouldUpdateWorkflow(DOCKER_EXEC_WORKFLOW);
+  }
+
+  @Test
+  public void shouldUpdateWorkflowWithFlyteExecConfig() throws Exception {
+    shouldUpdateWorkflow(FLYTE_EXEC_WORKFLOW);
+  }
+
+  private void shouldUpdateWorkflow(Workflow wf) throws Exception {
+    sinceVersion(Api.Version.V3);
+
+    Workflow existing_wf = Workflow.create(wf.componentId(), WorkflowConfigurationBuilder
+            .from(WORKFLOW_CONFIGURATION)
+            .dockerImage("earlier:image")
+            .build());
+
+    when(workflowInitializer.store(eq(wf), any())).thenReturn(Optional.of(existing_wf));
+
+    Response<ByteString> response =
+        awaitResponse(
+            serviceHelper
+                .request("POST", path("/" + wf.componentId()), serialize(wf.configuration())));
+
+    verify(workflowValidator).validateWorkflow(wf);
+    verify(workflowInitializer).store(eq(wf), any());
+    verify(workflowConsumer).accept(Optional.of(existing_wf), Optional.of(wf));
+
+    assertThat(response, hasStatus(withCode(Status.OK)));
+    assertThat(deserialize(response.payload().orElseThrow(), Workflow.class), equalTo(wf));
   }
 
   @Test
@@ -689,13 +732,29 @@ public class WorkflowResourceTest extends VersionedApiTest {
   }
 
   @Test
-  public void shouldDeleteWorkflow() throws Exception {
+  public void shouldDeleteWorkflowWithOldConfig() throws Exception {
+    shouldDeleteWorkflow(WORKFLOW);
+  }
+
+  @Test
+  public void shouldDeleteWorkflowWithDockerExecConfig() throws Exception {
+    shouldDeleteWorkflow(DOCKER_EXEC_WORKFLOW);
+  }
+
+  @Test
+  public void shouldDeleteWorkflowWithFlyteExecConfig() throws Exception {
+    shouldDeleteWorkflow(FLYTE_EXEC_WORKFLOW);
+  }
+
+  private void shouldDeleteWorkflow(Workflow wf) throws Exception {
     sinceVersion(Api.Version.V3);
-    var response = awaitResponse(serviceHelper.request("DELETE", path("/foo/bar")));
+    assertThat(storage.workflow(wf.id()), is(Optional.of(wf)));
+    var response = awaitResponse(serviceHelper.request("DELETE",
+        path("/" + wf.componentId() +"/" + wf.workflowId())));
     assertThat(response, hasStatus(withCode(Status.NO_CONTENT)));
     assertThat(response, hasNoPayload());
-    assertThat(storage.workflow(WORKFLOW.id()), is(Optional.empty()));
-    verify(workflowConsumer).accept(Optional.of(WORKFLOW), Optional.empty());
+    assertThat(storage.workflow(wf.id()), is(Optional.empty()));
+    verify(workflowConsumer).accept(Optional.of(wf), Optional.empty());
   }
 
   @Test
@@ -754,13 +813,11 @@ public class WorkflowResourceTest extends VersionedApiTest {
   public void shouldReturnWorkflows() throws Exception {
     sinceVersion(Api.Version.V3);
 
-    storage.storeWorkflow(Workflow.create("other_component", WORKFLOW_CONFIGURATION));
-
     Response<ByteString> response = awaitResponse(
         serviceHelper.request("GET", path("")));
 
     assertThat(response, hasStatus(withCode(Status.OK)));
-    assertJson(response, "[*]", hasSize(2));
+    assertJson(response, "[*]", hasSize(3));
   }
 
   @Test
@@ -802,16 +859,28 @@ public class WorkflowResourceTest extends VersionedApiTest {
   }
 
   @Test
-  public void shouldReturnWorkflow() throws Exception {
+  public void shouldReturnWorkflowWithOldConfig() throws Exception {
+    shouldReturnWorkflow(WORKFLOW);
+  }
+
+  @Test
+  public void shouldReturnWorkflowWithDockerExecConfig() throws Exception {
+    shouldReturnWorkflow(DOCKER_EXEC_WORKFLOW);
+  }
+
+  @Test
+  public void shouldReturnWorkflowWithFlyteExecConfig() throws Exception {
+    shouldReturnWorkflow(FLYTE_EXEC_WORKFLOW);
+  }
+
+  private void shouldReturnWorkflow(Workflow wf) throws Exception {
     sinceVersion(Api.Version.V3);
 
-    storage.storeWorkflow(Workflow.create("other_component", WORKFLOW_CONFIGURATION));
-
     Response<ByteString> response = awaitResponse(
-        serviceHelper.request("GET", path("/foo/bar")));
+        serviceHelper.request("GET", path("/" + wf.componentId() + "/" + wf.workflowId())));
 
     assertThat(response, hasStatus(withCode(Status.OK)));
-    assertJson(response, "component_id", is("foo"));
+    assertJson(response, "component_id", is(wf.componentId()));
   }
 
   @Test
