@@ -24,6 +24,7 @@ import static com.github.npathai.hamcrestopt.OptionalMatchers.isPresentAndIs;
 import static com.spotify.styx.model.Schedule.HOURS;
 import static com.spotify.styx.state.RunState.State.PREPARE;
 import static com.spotify.styx.testdata.TestData.FULL_WORKFLOW_CONFIGURATION;
+import static com.spotify.styx.testdata.TestData.MINIMAL_WORKFLOW_CONFIGURATION;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
@@ -181,10 +182,11 @@ public class ExecutionDescriptionHandlerTest {
   }
 
   @Test
-  public void shouldHaltIfMissingDockerImage() throws Exception {
+  public void shouldHaltIfMissingDockerImageAndFlyteExecDescription() throws Exception {
     var workflowConfiguration =
-        WorkflowConfigurationBuilder.from(workflowConfiguration("foo", "bar"))
+        WorkflowConfigurationBuilder.from(MINIMAL_WORKFLOW_CONFIGURATION)
             .dockerImage(Optional.empty())
+            .flyteExecConf(Optional.empty())
             .build();
     var workflow = Workflow.create("id", workflowConfiguration);
     var workflowState = WorkflowState.builder().enabled(true).build();
