@@ -128,9 +128,10 @@ public class StateInitializingTriggerTest {
   }
 
   @Test
-  public void shouldDoNothingIfDockerImageMissing() {
-    var configuration = WorkflowConfigurationBuilder.from(TestData.DAILY_WORKFLOW_CONFIGURATION)
+  public void shouldDoNothingIfDockerImageAndFlyteExecConfigIsMissing() {
+    var configuration = WorkflowConfigurationBuilder.from(TestData.MINIMAL_WORKFLOW_CONFIGURATION)
         .dockerImage(Optional.empty())
+        .flyteExecConf(Optional.empty())
         .build();
     var workflow = Workflow.create("id", configuration);
     trigger.event(workflow, NATURAL_TRIGGER, TIME, PARAMETERS);
